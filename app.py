@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import sqlite3
 import secrets
 import string
@@ -8,7 +11,7 @@ import re
 import os
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "replace_this_with_a_secure_random_key")
+app.secret_key = os.environ.get("SECRET_KEY", "BirdwoodHeights(#)")
 socketio = SocketIO(app, cors_allowed_origins="*")  # restrict in production
 
 DB = 'shopping.db'
