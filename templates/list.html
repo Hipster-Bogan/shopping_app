@@ -1,13 +1,93 @@
 <!doctype html>
 <html>
-<head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Login</title></head>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ list_name }} — {{ token }}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js" integrity="" crossorigin="anonymous"></script>
+</head>
 <body>
-<h3>Login</h3>
-<form method="POST">
-  Email: <input type="email" name="email" required><br>
-  Password: <input type="password" name="password" required><br>
-  <button type="submit">Login</button>
+<h3>{{ list_name }} (token: <strong>{{ token }}</strong>)</h3>
+<div>
+  <label>Your name (for others to see):</label>
+  <input id="yourName" placeholder="e.g. Jono">
+</div>
+
+<form id="addForm">
+  <input id="itemText" placeholder="Milk" required maxlength="200">
+  <input id="qty" type="number" value="1" min="1" max="999">
+  <button>Add</button>
 </form>
-<a href="/register">Register</a>
+
+<ul id="items">
+  {% for item in items %}
+    <li data-id="{{ item['id'] }}" style="text-decoration: {{ 'line-through' if item['checked'] else 'none' }}">
+      <span class="label">{{ item['item'] }} ({{ item['quantity'] }})</span>
+      <button class="toggle">✔</button>
+      <button class="delete">✖</button>
+    </li>
+  {% endfor %}
+</ul>
+
+<script>
+const token = "{{ token }}";
+const socket = io();
+
+function addItemToDOM(item) {
+  const ul = document.getElementById('items');
+  const li = document.createElement('li');
+  li.dataset.id = item.id;
+  li.style.textDecoration = item.checked ? 'line-through' : 'none';
+  li.innerHTML = `<span class="label">${escapeHtml(item.item)} (${item.quantity})</span>
+    <button class="toggle">✔</button>
+    <button class="delete">✖</button>`;
+  ul.appendChild(li);
+}
+
+function escapeHtml(s){ return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+socket.on('connect', () => {
+  const name = (document.getElementById('yourName').value || 'Guest');
+  socket.emit('join', { token: token, name: name });
+});
+
+socket.on('status', data => console.log('status', data));
+socket.on('error', data => alert(data.msg));
+
+socket.on('item_added', item => {
+  addItemToDOM(item);
+});
+
+socket.on('item_toggled', data => {
+  const li = document.querySelector(`li[data-id='${data.id}']`);
+  if (li) li.style.textDecoration = data.checked ? 'line-through' : 'none';
+});
+
+socket.on('item_deleted', data => {
+  const li = document.querySelector(`li[data-id='${data.id}']`);
+  if (li) li.remove();
+});
+
+// add form
+document.getElementById('addForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const text = document.getElementById('itemText').value.trim();
+  const qty = parseInt(document.getElementById('qty').value) || 1;
+  if (!text) return;
+  socket.emit('add_item', { token: token, item: text, quantity: qty });
+  document.getElementById('itemText').value = '';
+});
+
+// delegate toggle/delete
+document.getElementById('items').addEventListener('click', e=>{
+  const li = e.target.closest('li');
+  if (!li) return;
+  const id = li.dataset.id;
+  if (e.target.classList.contains('toggle')) {
+    socket.emit('toggle_item', { token: token, id: id });
+  } else if (e.target.classList.contains('delete')) {
+    if (confirm('Delete this item?')) socket.emit('delete_item', { token: token, id: id });
+  }
+});
+</script>
 </body>
 </html>
