@@ -91,29 +91,21 @@ def home():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    email = session.get('email')
-
     if request.method == 'POST':
         list_name = request.form.get('list_name')
         if list_name:
-            conn = get_db_connection()
-            conn.execute(
-                'INSERT INTO lists (name, owner_email) VALUES (?, ?)',
-                (list_name, email)
-            )
+            token = gen_token()
+            conn = get_db()
+            conn.execute('INSERT INTO lists (name, token) VALUES (?, ?)', (list_name, token))
             conn.commit()
             conn.close()
-            return redirect(url_for('home'))  # ✅ Prevents form re-submission
+            return redirect(url_for('home'))
 
-    # Always reload lists to show updates
-    conn = get_db_connection()
-    lists = conn.execute(
-        'SELECT * FROM lists WHERE owner_email = ?',
-        (email,)
-    ).fetchall()
+    conn = get_db()
+    lists = conn.execute('SELECT * FROM lists ORDER BY id DESC').fetchall()
     conn.close()
 
-    return render_template('create_list.html', email=email, lists=lists)
+    return render_template('create_list.html', lists=lists)
 
 
 
