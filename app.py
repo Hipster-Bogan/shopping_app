@@ -62,11 +62,34 @@ def valid_item_text(s):
     return bool(re.match(r'^[\w\s\-\.,!()&/]+$', s))
 
 # ---- Auth routes ----
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def home():
-    if 'user_id' in session:
-        return render_template('create_list.html', email=session.get('email'))
-    return redirect(url_for('login'))
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    email = session.get('email')
+
+    if request.method == 'POST':
+        list_name = request.form.get('list_name')
+        if list_name:
+            conn = get_db_connection()
+            conn.execute(
+                'INSERT INTO lists (name, owner_email) VALUES (?, ?)',
+                (list_name, email)
+            )
+            conn.commit()
+            conn.close()
+
+    # Always reload lists to show updates
+    conn = get_db_connection()
+    lists = conn.execute(
+        'SELECT * FROM lists WHERE owner_email = ?',
+        (email,)
+    ).fetchall()
+    conn.close()
+
+    return render_template('create_list.html', email=email, lists=lists)
+
 
 @app.route('/register', methods=['GET','POST'])
 def register():
