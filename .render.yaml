@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: shopping-list
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k eventlet -w 1 app:app
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
