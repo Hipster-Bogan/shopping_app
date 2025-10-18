@@ -1,33 +1,14 @@
-<!doctype html>
-<html>
-<head>
-  <link
-  href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-  rel="stylesheet"
-  integrity="sha384-ENjdO4Dr2bkBIFxQpeoQF7UHvU3W3p1rZr+cbWvYF6Im9K8z2GxM9JWvKHu9C0Ix"
-  crossorigin="anonymous"
-/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"><title>Create / Join</title></head>
-<body>
-{% if join_mode %}
-  <h3>Join a List</h3>
-  <form action="/join" method="post">
-    Token: <input name="token" required maxlength="8" placeholder="ABC123"><br>
-    <button type="submit">Open</button>
-  </form>
-  <a href="/login">Login</a>
-{% else %}
-  <h3>Create a Shared List</h3>
-  {% if email %}<p>Signed in as {{ email }} — <a href="/logout">Logout</a></p>{% endif %}
-  <form method="POST" action="/create_list">
-    List name: <input name="name" placeholder="Groceries"><br>
-    <button type="submit">Create & Open</button>
-  </form>
-  <hr>
-  <h4>Or join a list</h4>
-  <form method="GET" action="/join">
-    <button type="submit">Join by token</button>
-  </form>
-{% endif %}
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Create Shopping List{% endblock %}
+
+{% block content %}
+<h4 class="text-center mb-4">New Shopping List</h4>
+
+<form method="POST" class="card p-3 shadow-sm">
+  <div class="mb-3">
+    <label>List Name</label>
+    <input type="text" name="name" class="form-control" required>
+  </div>
+  <button type="submit" class="btn btn-primary w-100">Create</button>
+</form>
+{% endblock %}
