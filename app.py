@@ -11,7 +11,12 @@ import re
 import os
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session
+# remove DB
+import os
 
+if os.path.exists("shopping.db"):
+    os.remove("shopping.db")
+# end remove DB
 app = Flask(__name__)
 app.secret_key = "supersecretkey"  # make sure you already have this
 
