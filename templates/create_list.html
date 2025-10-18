@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Create / Join</title></head>
+<body>
+{% if join_mode %}
+  <h3>Join a List</h3>
+  <form action="/join" method="post">
+    Token: <input name="token" required maxlength="8" placeholder="ABC123"><br>
+    <button type="submit">Open</button>
+  </form>
+  <a href="/login">Login</a>
+{% else %}
+  <h3>Create a Shared List</h3>
+  {% if email %}<p>Signed in as {{ email }} — <a href="/logout">Logout</a></p>{% endif %}
+  <form method="POST" action="/create_list">
+    List name: <input name="name" placeholder="Groceries"><br>
+    <button type="submit">Create & Open</button>
+  </form>
+  <hr>
+  <h4>Or join a list</h4>
+  <form method="GET" action="/join">
+    <button type="submit">Join by token</button>
+  </form>
+{% endif %}
+</body>
+</html>
