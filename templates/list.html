@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><title>Shopping List</title></head>
+<body>
+<h2>Shopping List for {{ session.email }}</h2>
+<form method="POST">
+  Item: <input type="text" name="item" required>
+  Quantity: <input type="number" name="quantity" min="1" value="1">
+  <button type="submit">Add</button>
+</form>
+<ul>
+  {% for item in items %}
+    <li style="text-decoration: {{ 'line-through' if item['checked'] else 'none' }}">
+      {{ item['item'] }} ({{ item['quantity'] }})
+      <a href="/toggle/{{ item['id'] }}">[✔]</a>
+      <a href="/delete/{{ item['id'] }}">[x]</a>
+    </li>
+  {% endfor %}
+</ul>
+<a href="/logout">Logout</a>
+</body>
+</html>
