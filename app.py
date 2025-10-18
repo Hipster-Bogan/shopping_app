@@ -79,6 +79,7 @@ def home():
             )
             conn.commit()
             conn.close()
+            return redirect(url_for('home'))  # ✅ Prevents form re-submission
 
     # Always reload lists to show updates
     conn = get_db_connection()
@@ -89,6 +90,7 @@ def home():
     conn.close()
 
     return render_template('create_list.html', email=email, lists=lists)
+
 
 
 @app.route('/register', methods=['GET','POST'])
