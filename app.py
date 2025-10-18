@@ -9,6 +9,16 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, join_room, leave_room, emit
 import re
 import os
+import sqlite3
+from flask import Flask, render_template, request, redirect, url_for, session
+
+app = Flask(__name__)
+app.secret_key = "supersecretkey"  # make sure you already have this
+
+def get_db_connection():
+    conn = sqlite3.connect('shopping.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "BirdwoodHeights(#)")
