@@ -4,11 +4,33 @@
 {% block content %}
 <h4 class="text-center mb-4">New Shopping List</h4>
 
-<form method="POST" class="card p-3 shadow-sm">
+<form action="/" method="POST" class="card p-3 shadow-sm">
   <div class="mb-3">
-    <label>List Name</label>
-    <input type="text" name="name" class="form-control" required>
+    <label for="list_name" class="form-label">List Name</label>
+    <input
+      type="text"
+      id="list_name"
+      name="list_name"
+      class="form-control"
+      placeholder="Enter a list name (e.g., Groceries)"
+      required
+    >
   </div>
-  <button type="submit" class="btn btn-primary w-100">Create</button>
+  <button type="submit" class="btn btn-success w-100">Create List</button>
 </form>
+
+<hr class="my-4">
+
+{% if lists %}
+  <h5 class="mb-3 text-center">Your Lists</h5>
+  {% for l in lists %}
+  <div class="list-item d-flex justify-content-between align-items-center mb-2 p-3 rounded shadow-sm">
+    <span>{{ l['name'] }}</span>
+    <a href="{{ url_for('view_list', list_id=l['id']) }}" class="btn btn-outline-primary btn-sm">Open</a>
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="text-muted text-center mt-3">You haven't created any lists yet.</p>
+{% endif %}
+
 {% endblock %}
