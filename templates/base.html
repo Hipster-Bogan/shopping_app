@@ -32,7 +32,7 @@
 <nav class="navbar navbar-dark bg-primary">
   <div class="container-fluid">
     <a class="navbar-brand" href="/">🛒 Shopping List</a>
-    {% if current_user.is_authenticated %}
+    {% if session.get('email') %}
     <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
     {% endif %}
   </div>
