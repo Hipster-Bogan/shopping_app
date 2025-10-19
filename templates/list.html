@@ -33,8 +33,27 @@
   {% endfor %}
 </div>
 
-<div class="mt-4 text-center">
-  <small class="text-muted">Share token: <b>{{ shopping_list.share_token }}</b></small>
+<div class="mt-4">
+  <div class="card border-0 shadow-sm">
+    <div class="card-body">
+      <h6 class="card-title text-center">Share this list</h6>
+      <p class="card-text small text-muted mb-2">
+        Give this link or token to someone else so they can open the same list on their device.
+      </p>
+      <div class="d-flex flex-column gap-2">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">Link</span>
+          <input id="share-link" type="text" class="form-control" value="{{ shopping_list.share_url }}" readonly>
+          <button class="btn btn-outline-secondary" type="button" id="copy-link-btn">Copy</button>
+        </div>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">Token</span>
+          <input type="text" class="form-control" value="{{ shopping_list.share_token }}" readonly>
+        </div>
+      </div>
+      <small class="text-success d-none" id="copy-success">Link copied!</small>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -91,6 +110,22 @@
     const itemDiv = itemsDiv.querySelector(`.list-item[data-id="${id}"]`);
     if (itemDiv) {
       itemDiv.remove();
+    }
+  });
+
+  const copyBtn = document.getElementById('copy-link-btn');
+  const copySuccess = document.getElementById('copy-success');
+  copyBtn?.addEventListener('click', async () => {
+    const linkInput = document.getElementById('share-link');
+    try {
+      await navigator.clipboard.writeText(linkInput.value);
+      copySuccess.classList.remove('d-none');
+      setTimeout(() => copySuccess.classList.add('d-none'), 2000);
+    } catch (err) {
+      linkInput.select();
+      document.execCommand('copy');
+      copySuccess.classList.remove('d-none');
+      setTimeout(() => copySuccess.classList.add('d-none'), 2000);
     }
   });
 </script>

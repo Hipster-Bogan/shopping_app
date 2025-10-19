@@ -2,24 +2,44 @@
 {% block title %}Create Shopping List{% endblock %}
 
 {% block content %}
-<h4 class="text-center mb-4">New Shopping List</h4>
-
-<form action="/" method="POST" class="card p-3 shadow-sm">
-  <div class="mb-3">
-    <label for="list_name" class="form-label">List Name</label>
-    <input
-      type="text"
-      id="list_name"
-      name="list_name"
-      class="form-control"
-      placeholder="Enter a list name (e.g., Groceries)"
-      required
-    >
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h4 class="card-title text-center mb-3">Create a new list</h4>
+    <form action="/" method="POST">
+      <div class="mb-3">
+        <label for="list_name" class="form-label">List name</label>
+        <input
+          type="text"
+          id="list_name"
+          name="list_name"
+          class="form-control"
+          placeholder="Enter a list name (e.g., Groceries)"
+          required
+        >
+      </div>
+      <button type="submit" class="btn btn-success w-100">Create list</button>
+    </form>
   </div>
-  <button type="submit" class="btn btn-success w-100">Create List</button>
-</form>
+</div>
 
-<hr class="my-4">
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <h5 class="card-title text-center mb-3">Join an existing list</h5>
+    <p class="card-text small text-muted">
+      Already have a share token or link from someone else? Enter the token below to open their list and collaborate in real-time.
+    </p>
+    <form action="{{ url_for('join') }}" method="POST" class="d-flex gap-2">
+      <input
+        type="text"
+        name="token"
+        class="form-control text-uppercase"
+        placeholder="Enter share token"
+        required
+      >
+      <button type="submit" class="btn btn-outline-primary">Join</button>
+    </form>
+  </div>
+</div>
 
 {% if lists %}
   <h5 class="mb-3 text-center">Your Lists</h5>
