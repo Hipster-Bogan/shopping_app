@@ -26,7 +26,7 @@
   {% for l in lists %}
   <div class="list-item d-flex justify-content-between align-items-center mb-2 p-3 rounded shadow-sm">
     <span>{{ l['name'] }}</span>
-    <a href="{{ url_for('view_list', list_id=l['id']) }}" class="btn btn-outline-primary btn-sm">Open</a>
+    <a href="{{ url_for('open_list', token=l['token']) }}" class="btn btn-outline-primary btn-sm">Open</a>
   </div>
   {% endfor %}
 {% else %}
