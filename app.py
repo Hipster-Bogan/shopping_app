@@ -1,5 +1,13 @@
 import eventlet
-eventlet.monkey_patch()
+
+# Avoid monkey patching the ``os`` module because Gunicorn's eventlet worker
+# writes to an internal pipe while processing signals.  Eventlet's green
+# ``os.write`` implementation attempts to yield control using the hub
+# trampoline, which raises ``RuntimeError: do not call blocking functions from
+# the mainloop`` under Python 3.13.  Leaving ``os`` untouched prevents the
+# trampoline from being invoked in this context while keeping the rest of the
+# cooperative patches that Flask-SocketIO needs.
+eventlet.monkey_patch(os=False)
 
 import os
 import re
