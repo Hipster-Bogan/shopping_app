@@ -184,21 +184,6 @@ def open_list(token):
         share_token=token,
         items=items,
     )
-    shopping_list = {
-        'id': lst['id'],
-        'name': lst['name'],
-        'token': token,
-        'share_token': token,
-        'items': [
-            {
-                'id': row['id'],
-                'item': row['item'],
-                'quantity': row['quantity'],
-                'checked': bool(row['checked']),
-            }
-            for row in rows
-        ],
-    }
 
     return render_template('list.html', shopping_list=shopping_list)
 
