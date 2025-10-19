@@ -160,9 +160,29 @@ def open_list(token):
     if not lst:
         return "List not found", 404
     # fetch items
-    items = conn.execute("SELECT * FROM list_items WHERE list_id=? ORDER BY id", (lst['id'],)).fetchall()
+    rows = conn.execute(
+        "SELECT * FROM list_items WHERE list_id=? ORDER BY id",
+        (lst['id'],),
+    ).fetchall()
     conn.close()
-    return render_template('list.html', list_name=lst['name'], token=token, items=items)
+
+    shopping_list = {
+        'id': lst['id'],
+        'name': lst['name'],
+        'token': token,
+        'share_token': token,
+        'items': [
+            {
+                'id': row['id'],
+                'item': row['item'],
+                'quantity': row['quantity'],
+                'checked': bool(row['checked']),
+            }
+            for row in rows
+        ],
+    }
+
+    return render_template('list.html', shopping_list=shopping_list)
 
 @app.route('/api/list/<token>/items', methods=['GET'])
 def api_list_items(token):
