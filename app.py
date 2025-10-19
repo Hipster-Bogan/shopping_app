@@ -4,6 +4,7 @@
 import sqlite3
 import secrets
 import string
+from types import SimpleNamespace
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, join_room, leave_room, emit
@@ -166,6 +167,23 @@ def open_list(token):
     ).fetchall()
     conn.close()
 
+    items = [
+        SimpleNamespace(
+            id=row['id'],
+            item=row['item'],
+            quantity=row['quantity'],
+            checked=bool(row['checked']),
+        )
+        for row in rows
+    ]
+
+    shopping_list = SimpleNamespace(
+        id=lst['id'],
+        name=lst['name'],
+        token=token,
+        share_token=token,
+        items=items,
+    )
     shopping_list = {
         'id': lst['id'],
         'name': lst['name'],
