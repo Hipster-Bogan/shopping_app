@@ -3,4 +3,5 @@ flask-socketio
 eventlet
 gunicorn
 flask-login
-flask-sqlalchemy
+sqlalchemy>=1.4
+psycopg2-binary
