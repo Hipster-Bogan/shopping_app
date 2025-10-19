@@ -4,6 +4,7 @@
 import sqlite3
 import secrets
 import string
+from types import SimpleNamespace
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO, join_room, leave_room, emit
@@ -160,9 +161,31 @@ def open_list(token):
     if not lst:
         return "List not found", 404
     # fetch items
-    items = conn.execute("SELECT * FROM list_items WHERE list_id=? ORDER BY id", (lst['id'],)).fetchall()
+    rows = conn.execute(
+        "SELECT * FROM list_items WHERE list_id=? ORDER BY id",
+        (lst['id'],),
+    ).fetchall()
     conn.close()
-    return render_template('list.html', list_name=lst['name'], token=token, items=items)
+
+    items = [
+        SimpleNamespace(
+            id=row['id'],
+            item=row['item'],
+            quantity=row['quantity'],
+            checked=bool(row['checked']),
+        )
+        for row in rows
+    ]
+
+    shopping_list = SimpleNamespace(
+        id=lst['id'],
+        name=lst['name'],
+        token=token,
+        share_token=token,
+        items=items,
+    )
+
+    return render_template('list.html', shopping_list=shopping_list)
 
 @app.route('/api/list/<token>/items', methods=['GET'])
 def api_list_items(token):
