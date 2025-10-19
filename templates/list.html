@@ -26,8 +26,8 @@
 
 <div id="items">
   {% for item in shopping_list.items %}
-  <div class="list-item">
-    <span>{{ item.name }}</span>
+  <div class="list-item" data-id="{{ item.id }}">
+    <span>{{ item.item }}</span>
     <button class="btn btn-sm btn-outline-danger remove-btn" data-id="{{ item.id }}">✕</button>
   </div>
   {% endfor %}
@@ -41,7 +41,12 @@
 {% block scripts %}
 <script>
   const socket = io();
-  const listId = "{{ shopping_list.id }}";
+  const listToken = {{ shopping_list.token | tojson }};
+  const displayName = {{ session.get('email', 'Guest') | tojson }};
+
+  socket.on('connect', () => {
+    socket.emit('join', { token: listToken, name: displayName });
+  });
 
   const form = document.getElementById('add-form');
   const input = document.getElementById('item-input');
@@ -49,28 +54,44 @@
 
   form.addEventListener('submit', e => {
     e.preventDefault();
-    socket.emit('add_item', { list_id: listId, name: input.value });
+    const value = input.value.trim();
+    if (!value) {
+      return;
+    }
+    socket.emit('add_item', { token: listToken, item: value, quantity: 1 });
     input.value = '';
   });
 
   itemsDiv.addEventListener('click', e => {
     if (e.target.classList.contains('remove-btn')) {
       const id = e.target.getAttribute('data-id');
-      socket.emit('remove_item', { list_id: listId, item_id: id });
+      socket.emit('delete_item', { token: listToken, id: Number(id) });
     }
   });
 
   socket.on('item_added', item => {
     const div = document.createElement('div');
     div.classList.add('list-item');
-    div.innerHTML = `<span>${item.name}</span>
-      <button class="btn btn-sm btn-outline-danger remove-btn" data-id="${item.id}">✕</button>`;
+    div.setAttribute('data-id', item.id);
+
+    const span = document.createElement('span');
+    span.textContent = item.item;
+    div.appendChild(span);
+
+    const button = document.createElement('button');
+    button.className = 'btn btn-sm btn-outline-danger remove-btn';
+    button.setAttribute('data-id', item.id);
+    button.textContent = '✕';
+    div.appendChild(button);
+
     itemsDiv.appendChild(div);
   });
 
-  socket.on('item_removed', item_id => {
-    const btn = document.querySelector(`.remove-btn[data-id="${item_id}"]`);
-    if (btn) btn.parentElement.remove();
+  socket.on('item_deleted', ({ id }) => {
+    const itemDiv = itemsDiv.querySelector(`.list-item[data-id="${id}"]`);
+    if (itemDiv) {
+      itemDiv.remove();
+    }
   });
 </script>
 {% endblock %}
