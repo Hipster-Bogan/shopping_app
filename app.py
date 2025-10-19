@@ -184,6 +184,7 @@ def open_list(token):
         name=lst['name'],
         token=token,
         share_token=token,
+        share_url=url_for('open_list', token=token, _external=True),
         items=items,
     )
 
