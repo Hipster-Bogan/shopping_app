@@ -15,20 +15,6 @@ import os
 
 DB_PATH = "shopping.db"
 
-# --- TEMPORARY FIX: Force recreate the DB if old schema exists ---
-if os.path.exists(DB_PATH):
-    import sqlite3
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("PRAGMA table_info(lists)")
-    columns = [c[1] for c in cur.fetchall()]
-    conn.close()
-
-    if "owner_email" not in columns:
-        os.remove(DB_PATH)
-        print("⚠️ Old DB schema detected — shopping.db deleted for rebuild.")
-# ----------------------------------------------------------------
-
 def get_db_connection():
     conn = sqlite3.connect('shopping.db', check_same_thread=False)
     conn.row_factory = sqlite3.Row
