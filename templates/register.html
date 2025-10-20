@@ -4,6 +4,12 @@
 {% block content %}
 <h4 class="text-center mb-4">Register</h4>
 
+{% if error %}
+<div class="alert alert-danger" role="alert">
+  {{ error }}
+</div>
+{% endif %}
+
 <form method="POST" class="card p-3 shadow-sm">
   <div class="mb-3">
     <label>Email</label>
@@ -11,7 +17,8 @@
   </div>
   <div class="mb-3">
     <label>Password</label>
-    <input type="password" name="password" class="form-control" required>
+    <input type="password" name="password" class="form-control" required minlength="8">
+    <div class="form-text">Password must be at least 8 characters long.</div>
   </div>
   <button type="submit" class="btn btn-success w-100">Create Account</button>
 </form>

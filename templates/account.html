@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Account Settings{% endblock %}
+
+{% block content %}
+<h4 class="text-center mb-4">Update Password</h4>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+  {{ error }}
+</div>
+{% endif %}
+
+{% if message %}
+<div class="alert alert-success" role="alert">
+  {{ message }}
+</div>
+{% endif %}
+
+<form method="POST" class="card p-3 shadow-sm">
+  <div class="mb-3">
+    <label for="current_password" class="form-label">Current password</label>
+    <input type="password" class="form-control" id="current_password" name="current_password" required autocomplete="current-password">
+  </div>
+  <div class="mb-3">
+    <label for="new_password" class="form-label">New password</label>
+    <input type="password" class="form-control" id="new_password" name="new_password" required minlength="8" autocomplete="new-password">
+    <div class="form-text">Must be at least 8 characters.</div>
+  </div>
+  <div class="mb-3">
+    <label for="confirm_password" class="form-label">Confirm new password</label>
+    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password">
+  </div>
+  <button type="submit" class="btn btn-primary w-100">Save changes</button>
+</form>
+{% endblock %}

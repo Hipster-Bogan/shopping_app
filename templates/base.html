@@ -33,7 +33,14 @@
   <div class="container-fluid">
     <a class="navbar-brand" href="/">🛒 Shopping List</a>
     {% if session.get('email') %}
-    <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+    <div class="d-flex align-items-center gap-2">
+      {% if session.get('is_admin') %}
+      <a href="{{ url_for('manage_users') }}" class="btn btn-outline-light btn-sm">Manage users</a>
+      {% endif %}
+      <a href="{{ url_for('change_password') }}" class="btn btn-outline-light btn-sm">Account</a>
+      <span class="text-light small d-none d-sm-inline">{{ session.get('email') }}</span>
+      <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
+    </div>
     {% endif %}
   </div>
 </nav>
