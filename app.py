@@ -21,11 +21,20 @@ eventlet.monkey_patch(os=False)
 # underlying ``shutdown`` method and quietly ignore ``EBADF`` (and the
 # related ``ENOTCONN``) while preserving the default behaviour for every
 # other error.
-from eventlet.greenio import base as eventlet_greenio_base
 import socket
 
-if not getattr(eventlet_greenio_base.GreenSocket, "_safe_shutdown_wrapped", False):
-    _original_greensocket_init = eventlet_greenio_base.GreenSocket.__init__
+try:  # pragma: no cover - import path depends on Eventlet version
+    from eventlet.greenio.base import GreenSocket as _EventletGreenSocket
+except ImportError:  # pragma: no cover - Eventlet <0.34 exposes GreenSocket at package level
+    try:
+        from eventlet.greenio import GreenSocket as _EventletGreenSocket
+    except ImportError:  # pragma: no cover - fail gracefully if structure changes
+        _EventletGreenSocket = None
+
+if _EventletGreenSocket is not None and not getattr(
+    _EventletGreenSocket, "_safe_shutdown_wrapped", False
+):
+    _original_greensocket_init = _EventletGreenSocket.__init__
 
     def _safe_shutdown_greensocket_init(self, *args, **kwargs):
         _original_greensocket_init(self, *args, **kwargs)
@@ -44,8 +53,8 @@ if not getattr(eventlet_greenio_base.GreenSocket, "_safe_shutdown_wrapped", Fals
 
         self.shutdown = _shutdown_wrapper
 
-    eventlet_greenio_base.GreenSocket.__init__ = _safe_shutdown_greensocket_init
-    eventlet_greenio_base.GreenSocket._safe_shutdown_wrapped = True
+    _EventletGreenSocket.__init__ = _safe_shutdown_greensocket_init
+    _EventletGreenSocket._safe_shutdown_wrapped = True
 
 import os
 import re
