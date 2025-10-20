@@ -61,6 +61,7 @@ import os
 import re
 import secrets
 import string
+from pathlib import Path
 from types import SimpleNamespace
 
 from functools import wraps
@@ -81,17 +82,51 @@ from sqlalchemy import (Boolean, Column, ForeignKey, Integer, MetaData, String,
 from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.security import check_password_hash, generate_password_hash
 
-DB_PATH = "shopping.db"
+DEFAULT_SQLITE_FILENAME = "shopping.db"
+
+
+def _resolve_sqlite_url(filename: str) -> str:
+    """Return a SQLite connection URL, ensuring the directory exists."""
+
+    custom_file = os.environ.get("DATABASE_FILE")
+    if custom_file:
+        db_path = Path(custom_file).expanduser()
+    else:
+        base_dir = os.environ.get("APP_STATE_DIR") or os.environ.get("DATA_DIR")
+        if base_dir:
+            db_path = Path(base_dir).expanduser() / filename
+        else:
+            db_path = Path(__file__).resolve().parent / filename
+
+    if not db_path.parent.exists():
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    return f"sqlite:///{db_path}"
+
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 if DATABASE_URL:
-    engine = create_engine(DATABASE_URL, future=True)
+    if DATABASE_URL.startswith("sqlite:///"):
+        sqlite_path = DATABASE_URL.replace("sqlite:///", "", 1)
+        if sqlite_path.startswith(os.sep):
+            sqlite_url = DATABASE_URL
+        else:
+            sqlite_url = _resolve_sqlite_url(sqlite_path)
+        engine = create_engine(
+            sqlite_url,
+            connect_args={"check_same_thread": False},
+            future=True,
+        )
+    else:
+        engine = create_engine(DATABASE_URL, future=True)
 else:
     engine = create_engine(
-        f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False}, future=True
+        _resolve_sqlite_url(DEFAULT_SQLITE_FILENAME),
+        connect_args={"check_same_thread": False},
+        future=True,
     )
 
 metadata = MetaData()
