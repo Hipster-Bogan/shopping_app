@@ -1,4 +1,5 @@
 import errno
+import time
 
 import eventlet
 
@@ -77,7 +78,7 @@ from flask import (
 from flask_socketio import SocketIO, emit, join_room
 from sqlalchemy import (Boolean, Column, ForeignKey, Integer, MetaData, String,
                         Table, create_engine, delete, insert, select, update, inspect, text)
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 DB_PATH = "shopping.db"
@@ -183,8 +184,32 @@ def ensure_initial_admin():
             )
 
 
-ensure_schema()
-ensure_initial_admin()
+def _initialise_database_with_retry(max_attempts=5, initial_delay=1.0, max_delay=30.0):
+    """Ensure the database schema exists, retrying if the database is waking up."""
+
+    delay = initial_delay
+    attempt = 1
+
+    while True:
+        try:
+            ensure_schema()
+            ensure_initial_admin()
+            return
+        except OperationalError as exc:
+            if attempt >= max_attempts:
+                raise
+
+            print(
+                "Database initialisation failed (attempt {} of {}): {}. Retrying in {:.1f}s".format(
+                    attempt, max_attempts, exc, delay
+                )
+            )
+            time.sleep(delay)
+            delay = min(delay * 2, max_delay)
+            attempt += 1
+
+
+_initialise_database_with_retry()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "BirdwoodHeights(#)")
