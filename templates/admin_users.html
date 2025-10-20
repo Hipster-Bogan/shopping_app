@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<h4 class="text-center mb-4">User Management</h4>
+
+{% if error %}
+<div class="alert alert-danger" role="alert">
+  {{ error }}
+</div>
+{% endif %}
+
+{% if message %}
+<div class="alert alert-success" role="alert">
+  {{ message }}
+</div>
+{% endif %}
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <p class="text-muted small">
+      Approve new accounts, promote additional administrators, and set temporary passwords for users.
+    </p>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Email</th>
+            <th scope="col">Status</th>
+            <th scope="col">Role</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr class="{% if not user.is_approved %}table-warning{% endif %}">
+            <td>{{ user.email }}</td>
+            <td>
+              {% if user.is_approved %}
+              <span class="badge bg-success">Approved</span>
+              {% else %}
+              <span class="badge bg-warning text-dark">Pending</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if user.is_admin %}
+              <span class="badge bg-primary">Administrator</span>
+              {% else %}
+              <span class="badge bg-secondary">Member</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex flex-wrap gap-2">
+                {% if not user.is_approved %}
+                <form method="POST" class="d-inline">
+                  <input type="hidden" name="user_id" value="{{ user.id }}">
+                  <input type="hidden" name="action" value="approve">
+                  <button class="btn btn-success btn-sm">Approve</button>
+                </form>
+                {% else %}
+                <form method="POST" class="d-inline">
+                  <input type="hidden" name="user_id" value="{{ user.id }}">
+                  <input type="hidden" name="action" value="deactivate">
+                  <button class="btn btn-outline-secondary btn-sm"{% if user.id == current_user_id %} disabled{% endif %}>Deactivate</button>
+                </form>
+                {% endif %}
+
+                {% if user.is_admin %}
+                {% if user.id != current_user_id %}
+                <form method="POST" class="d-inline">
+                  <input type="hidden" name="user_id" value="{{ user.id }}">
+                  <input type="hidden" name="action" value="remove_admin">
+                  <button class="btn btn-outline-danger btn-sm">Remove admin</button>
+                </form>
+                {% endif %}
+                {% else %}
+                <form method="POST" class="d-inline">
+                  <input type="hidden" name="user_id" value="{{ user.id }}">
+                  <input type="hidden" name="action" value="make_admin">
+                  <button class="btn btn-outline-primary btn-sm">Make admin</button>
+                </form>
+                {% endif %}
+              </div>
+              <form method="POST" class="d-flex flex-column flex-sm-row gap-2 mt-2">
+                <input type="hidden" name="user_id" value="{{ user.id }}">
+                <input type="hidden" name="action" value="reset_password">
+                <input
+                  type="password"
+                  name="new_password"
+                  class="form-control form-control-sm"
+                  placeholder="New password (min 8 chars)"
+                  autocomplete="new-password"
+                >
+                <button class="btn btn-outline-success btn-sm">Set password</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">No users found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

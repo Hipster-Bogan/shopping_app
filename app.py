@@ -62,6 +62,8 @@ import secrets
 import string
 from types import SimpleNamespace
 
+from functools import wraps
+
 from flask import (
     Flask,
     jsonify,
@@ -70,10 +72,11 @@ from flask import (
     request,
     session,
     url_for,
+    g,
 )
 from flask_socketio import SocketIO, emit, join_room
 from sqlalchemy import (Boolean, Column, ForeignKey, Integer, MetaData, String,
-                        Table, create_engine, delete, insert, select, update)
+                        Table, create_engine, delete, insert, select, update, inspect, text)
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -98,6 +101,8 @@ users_table = Table(
     Column("id", Integer, primary_key=True),
     Column("email", String(255), unique=True, nullable=False),
     Column("password_hash", String(255), nullable=False),
+    Column("is_admin", Boolean, nullable=False, default=False),
+    Column("is_approved", Boolean, nullable=False, default=False),
 )
 
 lists_table = Table(
@@ -119,6 +124,67 @@ list_items_table = Table(
 )
 
 metadata.create_all(engine)
+
+
+def ensure_schema():
+    dialect = engine.dialect.name
+    false_literal = "0" if dialect == "sqlite" else "FALSE"
+    true_literal = "1" if dialect == "sqlite" else "TRUE"
+
+    with engine.begin() as conn:
+        inspector = inspect(conn)
+        columns = {col["name"] for col in inspector.get_columns("users")}
+
+        if "is_admin" not in columns:
+            conn.execute(
+                text(
+                    f"ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT {false_literal}"
+                )
+            )
+
+        if "is_approved" not in columns:
+            conn.execute(
+                text(
+                    f"ALTER TABLE users ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT {false_literal}"
+                )
+            )
+            conn.execute(text(f"UPDATE users SET is_approved = {true_literal}"))
+
+    with engine.begin() as conn:
+        conn.execute(
+            update(users_table)
+            .where(users_table.c.is_admin.is_(None))
+            .values(is_admin=False)
+        )
+        conn.execute(
+            update(users_table)
+            .where(users_table.c.is_approved.is_(None))
+            .values(is_approved=True)
+        )
+
+
+def ensure_initial_admin():
+    with engine.begin() as conn:
+        admin_exists = conn.execute(
+            select(users_table.c.id).where(users_table.c.is_admin.is_(True))
+        ).first()
+        if admin_exists:
+            return
+
+        first_user = conn.execute(
+            select(users_table.c.id).order_by(users_table.c.id)
+        ).first()
+
+        if first_user:
+            conn.execute(
+                update(users_table)
+                .where(users_table.c.id == first_user[0])
+                .values(is_admin=True, is_approved=True)
+            )
+
+
+ensure_schema()
+ensure_initial_admin()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "BirdwoodHeights(#)")
@@ -155,12 +221,66 @@ def valid_item_text(s):
     # allow letters, numbers, punctuation, spaces
     return bool(re.match(r'^[\w\s\-\.,!()&/]+$', s))
 
+
+def load_current_user():
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+
+    with engine.connect() as conn:
+        user = conn.execute(
+            select(users_table).where(users_table.c.id == user_id)
+        ).mappings().first()
+
+    return user
+
+
+def require_current_user(require_admin=False):
+    user = load_current_user()
+    if not user:
+        session.clear()
+        return None, redirect(url_for("login"))
+
+    if not user["is_approved"]:
+        session.clear()
+        return None, redirect(url_for("login", msg="not_approved"))
+
+    session["email"] = user["email"]
+    session["is_admin"] = bool(user["is_admin"])
+
+    if require_admin and not user["is_admin"]:
+        return None, redirect(url_for("home"))
+
+    return user, None
+
+
+def login_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        user, response = require_current_user()
+        if response is not None:
+            return response
+        g.current_user = user
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        user, response = require_current_user(require_admin=True)
+        if response is not None:
+            return response
+        g.current_user = user
+        return fn(*args, **kwargs)
+
+    return wrapper
+
 # ---- Auth routes ----
 @app.route('/', methods=['GET', 'POST'])
+@login_required
 def home():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
     error = None
     if request.method == 'POST':
         try:
@@ -179,24 +299,52 @@ def home():
 
 @app.route('/register', methods=['GET','POST'])
 def register():
+    error = None
     if request.method == 'POST':
         email = request.form['email'].strip().lower()
         password = request.form['password']
         if not email or not password:
-            return "Missing fields", 400
-        pw_hash = generate_password_hash(password)
-        try:
-            with engine.begin() as conn:
-                conn.execute(
-                    insert(users_table).values(email=email, password_hash=pw_hash)
-                )
-        except IntegrityError:
-            return "User exists", 400
-        return redirect(url_for('login'))
-    return render_template('register.html')
+            error = "Please provide both email and password."
+        elif len(password) < 8:
+            error = "Password must be at least 8 characters long."
+        else:
+            pw_hash = generate_password_hash(password)
+            try:
+                with engine.begin() as conn:
+                    is_first_user = conn.execute(
+                        select(users_table.c.id).limit(1)
+                    ).first() is None
+
+                    conn.execute(
+                        insert(users_table).values(
+                            email=email,
+                            password_hash=pw_hash,
+                            is_admin=is_first_user,
+                            is_approved=is_first_user,
+                        )
+                    )
+            except IntegrityError:
+                error = "A user with that email already exists."
+            else:
+                if is_first_user:
+                    return redirect(url_for('login', msg='first_admin'))
+                return redirect(url_for('login', msg='pending'))
+    return render_template('register.html', error=error)
 
 @app.route('/login', methods=['GET','POST'])
 def login():
+    message = None
+    msg_code = request.args.get('msg')
+    if msg_code == 'pending':
+        message = "Account created. Please wait for an administrator to approve your access."
+    elif msg_code == 'first_admin':
+        message = "Administrator account created. You can now sign in."
+    elif msg_code == 'not_approved':
+        message = "Your account is not approved yet. Contact an administrator for assistance."
+    elif msg_code == 'password_reset':
+        message = "Password updated. Please sign in with your new password."
+
+    error = None
     if request.method == 'POST':
         email = request.form['email'].strip().lower()
         password = request.form['password']
@@ -205,11 +353,15 @@ def login():
                 select(users_table).where(users_table.c.email == email)
             ).mappings().first()
         if not user or not check_password_hash(user['password_hash'], password):
-            return "Invalid credentials", 401
-        session['user_id'] = user['id']
-        session['email'] = user['email']
-        return redirect(url_for('home'))
-    return render_template('login.html')
+            error = "Invalid credentials."
+        elif not user['is_approved']:
+            error = "Your account is awaiting approval."
+        else:
+            session['user_id'] = user['id']
+            session['email'] = user['email']
+            session['is_admin'] = bool(user['is_admin'])
+            return redirect(url_for('home'))
+    return render_template('login.html', error=error, message=message)
 
 @app.route('/logout')
 def logout():
@@ -218,15 +370,167 @@ def logout():
 
 # ---- List management ----
 @app.route('/create_list', methods=['POST'])
+@login_required
 def create_list():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     raw_name = request.form.get('list_name') or request.form.get('name')
     try:
         token = create_list_record(raw_name)
     except ValueError:
         return "List name required", 400
     return redirect(url_for('open_list', token=token))
+
+@app.route('/admin/users', methods=['GET','POST'])
+@admin_required
+def manage_users():
+    message = None
+    error = None
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        try:
+            target_id = int(request.form.get('user_id', '0'))
+        except (TypeError, ValueError):
+            target_id = 0
+        current_user = g.current_user
+
+        if not target_id:
+            error = "Invalid user identifier."
+
+        if error is None:
+            with engine.begin() as conn:
+                target = conn.execute(
+                    select(users_table).where(users_table.c.id == target_id)
+                ).mappings().first()
+
+                if not target:
+                    error = "User not found."
+                else:
+                    if action == 'approve':
+                        if target['is_approved']:
+                            message = f"{target['email']} is already approved."
+                        else:
+                            conn.execute(
+                                update(users_table)
+                                .where(users_table.c.id == target_id)
+                                .values(is_approved=True)
+                            )
+                            message = f"Approved access for {target['email']}."
+                    elif action == 'deactivate':
+                        if target_id == current_user['id'] and target['is_admin']:
+                            error = "You cannot deactivate your own administrator account."
+                        else:
+                            if target['is_admin']:
+                                other_admin = conn.execute(
+                                    select(users_table.c.id)
+                                    .where(
+                                        users_table.c.is_admin.is_(True),
+                                        users_table.c.id != target_id,
+                                    )
+                                    .limit(1)
+                                ).first()
+                                if not other_admin:
+                                    error = "Cannot deactivate the last administrator."
+                            if error is None:
+                                conn.execute(
+                                    update(users_table)
+                                    .where(users_table.c.id == target_id)
+                                    .values(is_approved=False)
+                                )
+                                message = f"Deactivated {target['email']}."
+                    elif action == 'make_admin':
+                        if target['is_admin']:
+                            message = f"{target['email']} is already an administrator."
+                        else:
+                            conn.execute(
+                                update(users_table)
+                                .where(users_table.c.id == target_id)
+                                .values(is_admin=True, is_approved=True)
+                            )
+                            message = f"Granted administrator rights to {target['email']}."
+                    elif action == 'remove_admin':
+                        if not target['is_admin']:
+                            message = f"{target['email']} is not an administrator."
+                        else:
+                            other_admin = conn.execute(
+                                select(users_table.c.id)
+                                .where(
+                                    users_table.c.is_admin.is_(True),
+                                    users_table.c.id != target_id,
+                                )
+                                .limit(1)
+                            ).first()
+                            if not other_admin:
+                                error = "Cannot remove the last administrator."
+                            else:
+                                conn.execute(
+                                    update(users_table)
+                                    .where(users_table.c.id == target_id)
+                                    .values(is_admin=False)
+                                )
+                                message = f"Removed administrator rights from {target['email']}."
+                    elif action == 'reset_password':
+                        new_password = (request.form.get('new_password') or '').strip()
+                        if len(new_password) < 8:
+                            error = "New password must be at least 8 characters long."
+                        else:
+                            pw_hash = generate_password_hash(new_password)
+                            conn.execute(
+                                update(users_table)
+                                .where(users_table.c.id == target_id)
+                                .values(password_hash=pw_hash)
+                            )
+                            message = f"Password updated for {target['email']}."
+                    else:
+                        error = "Unsupported action."
+
+        if error is None and target_id == current_user['id']:
+            updated_user = load_current_user()
+            if updated_user:
+                session['is_admin'] = bool(updated_user['is_admin'])
+
+    with engine.connect() as conn:
+        users = conn.execute(
+            select(users_table).order_by(users_table.c.id)
+        ).mappings().all()
+
+    return render_template(
+        'admin_users.html',
+        users=users,
+        message=message,
+        error=error,
+        current_user_id=g.current_user['id'],
+    )
+
+
+@app.route('/account/password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    message = None
+    error = None
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '')
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        if not new_password or len(new_password) < 8:
+            error = "New password must be at least 8 characters long."
+        elif new_password != confirm_password:
+            error = "New password and confirmation do not match."
+        elif not check_password_hash(g.current_user['password_hash'], current_password):
+            error = "Current password is incorrect."
+        else:
+            pw_hash = generate_password_hash(new_password)
+            with engine.begin() as conn:
+                conn.execute(
+                    update(users_table)
+                    .where(users_table.c.id == g.current_user['id'])
+                    .values(password_hash=pw_hash)
+                )
+            message = "Password updated successfully."
+            g.current_user['password_hash'] = pw_hash
+
+    return render_template('account.html', message=message, error=error)
+
 
 @app.route('/join', methods=['GET','POST'])
 def join():
