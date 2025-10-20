@@ -1,3 +1,5 @@
+import errno
+
 import eventlet
 
 # Avoid monkey patching the ``os`` module because Gunicorn's eventlet worker
@@ -8,6 +10,42 @@ import eventlet
 # trampoline from being invoked in this context while keeping the rest of the
 # cooperative patches that Flask-SocketIO needs.
 eventlet.monkey_patch(os=False)
+
+# Gunicorn's Eventlet worker occasionally attempts to shutdown client
+# sockets that have already been closed by the remote peer.  In that
+# situation Eventlet's ``GreenSocket`` forwards the call to the real
+# socket object, which raises ``EBADF`` and produces noisy log entries
+# such as ``socket shutdown error: [Errno 9] Bad file descriptor``.
+#
+# Monkey-patching the GreenSocket initialiser lets us wrap the
+# underlying ``shutdown`` method and quietly ignore ``EBADF`` (and the
+# related ``ENOTCONN``) while preserving the default behaviour for every
+# other error.
+from eventlet.greenio import base as eventlet_greenio_base
+import socket
+
+if not getattr(eventlet_greenio_base.GreenSocket, "_safe_shutdown_wrapped", False):
+    _original_greensocket_init = eventlet_greenio_base.GreenSocket.__init__
+
+    def _safe_shutdown_greensocket_init(self, *args, **kwargs):
+        _original_greensocket_init(self, *args, **kwargs)
+        real_shutdown = getattr(self, "shutdown", None)
+
+        if real_shutdown is None:
+            return
+
+        def _shutdown_wrapper(how=socket.SHUT_RDWR):
+            try:
+                return real_shutdown(how)
+            except OSError as exc:  # pragma: no cover - defensive guard
+                if exc.errno in (errno.EBADF, errno.ENOTCONN):
+                    return None
+                raise
+
+        self.shutdown = _shutdown_wrapper
+
+    eventlet_greenio_base.GreenSocket.__init__ = _safe_shutdown_greensocket_init
+    eventlet_greenio_base.GreenSocket._safe_shutdown_wrapped = True
 
 import os
 import re
