@@ -62,7 +62,15 @@ import secrets
 import string
 from types import SimpleNamespace
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask_socketio import SocketIO, emit, join_room
 from sqlalchemy import (Boolean, Column, ForeignKey, Integer, MetaData, String,
                         Table, create_engine, delete, insert, select, update)
@@ -121,6 +129,25 @@ def gen_token(length=6):
     alphabet = string.ascii_uppercase + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
+
+def create_list_record(raw_name):
+    """Create a shopping list row and return its share token."""
+
+    name = (raw_name or "").strip()
+    if not name:
+        raise ValueError("List name required")
+
+    while True:
+        token = gen_token()
+        try:
+            with engine.begin() as conn:
+                conn.execute(insert(lists_table).values(name=name, token=token))
+            return token
+        except IntegrityError:
+            # Token collision is unlikely but retry on the off-chance it happens.
+            continue
+
+
 def valid_item_text(s):
     # basic validation to avoid massive input or control chars
     if not s or len(s) > 200:
@@ -134,21 +161,19 @@ def home():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
+    error = None
     if request.method == 'POST':
-        list_name = request.form.get('list_name')
-        if list_name:
-            token = gen_token()
-            with engine.begin() as conn:
-                conn.execute(
-                    insert(lists_table).values(name=list_name.strip(), token=token)
-                )
+        try:
+            create_list_record(request.form.get('list_name'))
             return redirect(url_for('home'))
+        except ValueError:
+            error = "Please enter a name for your list."
 
     with engine.connect() as conn:
         result = conn.execute(select(lists_table).order_by(lists_table.c.id.desc()))
         lists = [dict(row._mapping) for row in result]
 
-    return render_template('create_list.html', lists=lists)
+    return render_template('create_list.html', lists=lists, error=error)
 
 
 
@@ -196,10 +221,11 @@ def logout():
 def create_list():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    name = request.form.get('name', 'Shopping List').strip()
-    token = gen_token()
-    with engine.begin() as conn:
-        conn.execute(insert(lists_table).values(name=name, token=token))
+    raw_name = request.form.get('list_name') or request.form.get('name')
+    try:
+        token = create_list_record(raw_name)
+    except ValueError:
+        return "List name required", 400
     return redirect(url_for('open_list', token=token))
 
 @app.route('/join', methods=['GET','POST'])
@@ -207,7 +233,7 @@ def join():
     if request.method == 'POST':
         token = request.form.get('token', '').strip().upper()
         return redirect(url_for('open_list', token=token))
-    return render_template('create_list.html', join_mode=True)
+    return render_template('create_list.html', join_mode=True, error=None, lists=None)
 
 @app.route('/list/<token>')
 def open_list(token):
