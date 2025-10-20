@@ -2,6 +2,11 @@
 {% block title %}Create Shopping List{% endblock %}
 
 {% block content %}
+{% if error %}
+<div class="alert alert-danger" role="alert">
+  {{ error }}
+</div>
+{% endif %}
 <div class="card border-0 shadow-sm mb-4">
   <div class="card-body">
     <h4 class="card-title text-center mb-3">Create a new list</h4>
