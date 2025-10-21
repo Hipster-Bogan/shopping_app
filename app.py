@@ -61,10 +61,8 @@ import os
 import re
 import secrets
 import string
-from pathlib import Path
-from types import SimpleNamespace
-
 from functools import wraps
+from types import SimpleNamespace
 
 from flask import (
     Flask,
@@ -77,126 +75,19 @@ from flask import (
     g,
 )
 from flask_socketio import SocketIO, emit, join_room
-from sqlalchemy import (Boolean, Column, ForeignKey, Integer, MetaData, String,
-                        Table, create_engine, delete, insert, select, update, inspect, text)
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.security import check_password_hash, generate_password_hash
 
-DEFAULT_SQLITE_FILENAME = "shopping.db"
-
-
-def _resolve_sqlite_url(filename: str) -> str:
-    """Return a SQLite connection URL, ensuring the directory exists."""
-
-    custom_file = os.environ.get("DATABASE_FILE")
-    if custom_file:
-        db_path = Path(custom_file).expanduser()
-    else:
-        base_dir = os.environ.get("APP_STATE_DIR") or os.environ.get("DATA_DIR")
-        if base_dir:
-            db_path = Path(base_dir).expanduser() / filename
-        else:
-            db_path = Path(__file__).resolve().parent / filename
-
-    if not db_path.parent.exists():
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    return f"sqlite:///{db_path}"
-
-
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-if DATABASE_URL:
-    if DATABASE_URL.startswith("sqlite:///"):
-        sqlite_path = DATABASE_URL.replace("sqlite:///", "", 1)
-        if sqlite_path.startswith(os.sep):
-            sqlite_url = DATABASE_URL
-        else:
-            sqlite_url = _resolve_sqlite_url(sqlite_path)
-        engine = create_engine(
-            sqlite_url,
-            connect_args={"check_same_thread": False},
-            future=True,
-        )
-    else:
-        engine = create_engine(DATABASE_URL, future=True)
-else:
-    engine = create_engine(
-        _resolve_sqlite_url(DEFAULT_SQLITE_FILENAME),
-        connect_args={"check_same_thread": False},
-        future=True,
-    )
-
-metadata = MetaData()
-
-users_table = Table(
-    "users",
-    metadata,
-    Column("id", Integer, primary_key=True),
-    Column("email", String(255), unique=True, nullable=False),
-    Column("password_hash", String(255), nullable=False),
-    Column("is_admin", Boolean, nullable=False, default=False),
-    Column("is_approved", Boolean, nullable=False, default=False),
+from database import (
+    DEFAULT_SQLITE_FILENAME,
+    engine,
+    ensure_schema,
+    list_items_table,
+    lists_table,
+    resolve_sqlite_path,
+    users_table,
 )
-
-lists_table = Table(
-    "lists",
-    metadata,
-    Column("id", Integer, primary_key=True),
-    Column("name", String(255), nullable=False),
-    Column("token", String(32), unique=True, nullable=False),
-)
-
-list_items_table = Table(
-    "list_items",
-    metadata,
-    Column("id", Integer, primary_key=True),
-    Column("list_id", Integer, ForeignKey("lists.id"), nullable=False),
-    Column("item", String(255), nullable=False),
-    Column("quantity", Integer, nullable=False, default=1),
-    Column("checked", Boolean, nullable=False, default=False),
-)
-
-metadata.create_all(engine)
-
-
-def ensure_schema():
-    dialect = engine.dialect.name
-    false_literal = "0" if dialect == "sqlite" else "FALSE"
-    true_literal = "1" if dialect == "sqlite" else "TRUE"
-
-    with engine.begin() as conn:
-        inspector = inspect(conn)
-        columns = {col["name"] for col in inspector.get_columns("users")}
-
-        if "is_admin" not in columns:
-            conn.execute(
-                text(
-                    f"ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT {false_literal}"
-                )
-            )
-
-        if "is_approved" not in columns:
-            conn.execute(
-                text(
-                    f"ALTER TABLE users ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT {false_literal}"
-                )
-            )
-            conn.execute(text(f"UPDATE users SET is_approved = {true_literal}"))
-
-    with engine.begin() as conn:
-        conn.execute(
-            update(users_table)
-            .where(users_table.c.is_admin.is_(None))
-            .values(is_admin=False)
-        )
-        conn.execute(
-            update(users_table)
-            .where(users_table.c.is_approved.is_(None))
-            .values(is_approved=True)
-        )
 
 
 def ensure_initial_admin():
@@ -227,7 +118,7 @@ def _initialise_database_with_retry(max_attempts=5, initial_delay=1.0, max_delay
 
     while True:
         try:
-            ensure_schema()
+            ensure_schema(engine)
             ensure_initial_admin()
             return
         except OperationalError as exc:

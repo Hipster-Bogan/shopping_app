@@ -8,3 +8,5 @@ services:
     envVars:
       - key: SECRET_KEY
         generateValue: true
+      - key: DATABASE_URL
+        fromSecret: NEON_DATABASE_URL
